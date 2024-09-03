@@ -12,7 +12,6 @@ function Square({ value, onSquareClick }) {
 }
 
 export default function Board() {
-  const [xIsNext, setXIsNext] = useState(true);
   const [squares, setSquares] = useState(Array(9).fill(null));
 
   function handleClick(i) {
@@ -20,21 +19,40 @@ export default function Board() {
       return;
     }
     const nextSquares = squares.slice();
-    if (xIsNext) {
-      nextSquares[i] = "X";
-    } else {
-      nextSquares[i] = "O";
+    nextSquares[i] = "O";
+
+    if (calcurateWinner(nextSquares)) {
+      // ユーザーのターンでゲーム終了
+      setSquares(nextSquares);
+      return;
     }
-    setSquares(nextSquares);
-    setXIsNext(!xIsNext);
+
+    // AIのターン
+    const state_index = calcurateStateIndex(nextSquares);
+    fetch(`http://localhost:8080/api/state_action?state_index=${state_index}`)
+      .then(response => {
+        if (!response.ok) {
+          throw new Error('Network response was not ok');
+        }
+        return response.json();
+      })
+      .then(data => {
+        nextSquares[data.action] = 'X'
+        setSquares(nextSquares);
+      })
+      .catch(error => {
+        console.error('Error fetching message:', error.message);
+      });
   }
 
   const winner = calcurateWinner(squares);
   let status;
-  if (winner) {
+  if (winner === 'O' || winner === 'X') {
     status = "Winner: " + winner;
+  } else if (winner === '_') {
+    status = "Draw";
   } else {
-    status = "Next player: " + (xIsNext ? "X" : "O");
+    status = "Next player: " + "O";
   }
 
 
@@ -60,6 +78,31 @@ export default function Board() {
   );
 }
 
+function calcurateStateIndex(squares) {
+  let index = 0;
+  for (let i = 0; i < 9; i++) {
+    let value;
+    const flip_index = [0, 3, 6, 1, 4, 7, 2, 5, 8]
+    const cell = squares[flip_index[i]];
+    console.log(cell)
+
+    if (cell === null) {
+      value = 0;
+    } else if (cell === "O") {
+      value = 1;
+    } else if (cell === "X") {
+      value = 2;
+    } else {
+      console.error(`calcurateStateIndex() state[${Math.floor(i / 3)}][${i % 3}] is invalid '${cell}'`);
+      return null; // エラーハンドリングのため関数を終了
+    }
+
+    index += value * Math.pow(3, i);
+  }
+  console.log(index)
+  return index;
+}
+
 function calcurateWinner(squares) {
   const lines = [
     [0, 1, 2],
@@ -78,4 +121,10 @@ function calcurateWinner(squares) {
       return squares[a];
     }
   }
+  for (let i = 0; i < 9; i++) {
+    if (squares[i] === null) {
+      return null
+    }
+  }
+  return '_'
 }
